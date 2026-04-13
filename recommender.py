@@ -20,11 +20,9 @@ def crear_matriz_usuario_item(ratings):
 
 def entrenar_modelo_iterative(matriz, n_usuarios=50, n_peliculas=50, max_iter=1):
     """
-    Versión ultra reducida para carga inmediata (<5 segundos).
+    Entrena sobre una muestra reducida y devuelve la matriz completada.
     """
-    # Seleccionar los usuarios más activos
     usuarios_activos = matriz.count(axis=1).sort_values(ascending=False).head(n_usuarios).index
-    # Seleccionar las películas más populares
     pelis_populares = matriz.count().sort_values(ascending=False).head(n_peliculas).index
     
     matriz_reducida = matriz.loc[usuarios_activos, pelis_populares]
@@ -45,36 +43,49 @@ def entrenar_modelo_iterative(matriz, n_usuarios=50, n_peliculas=50, max_iter=1)
     print("Entrenamiento completado.")
     return matriz_completada
 
-def recomendar_peliculas(ratings_usuario, matriz_original, movies_df, top_n=10):
-    nuevo_user_id = matriz_original.index.max() + 1
-    nueva_fila = pd.Series(index=matriz_original.columns, dtype=float)
-    for item_id, rating in ratings_usuario.items():
-        if item_id in nueva_fila.index:
-            nueva_fila[item_id] = float(rating)
-    
-    matriz_ampliada = matriz_original.copy()
-    matriz_ampliada.loc[nuevo_user_id] = nueva_fila
-    matriz_ampliada_limpia = matriz_ampliada.dropna(how='all').dropna(axis=1, how='all')
-    
-    if matriz_ampliada_limpia.empty:
+def recomendar_peliculas(ratings_usuario, matriz_completada, movies_df, top_n=10):
+    """
+    Usa la matriz ya completada (cacheada) para recomendar.
+    Se asume que 'ratings_usuario' son calificaciones del nuevo usuario.
+    Para predecir, se usa el promedio de los ratings de los 10 usuarios más similares
+    (similitud coseno) sobre la matriz completada.
+    """
+    # Filtrar películas que están en la matriz completada
+    pelis_validas = [p for p in ratings_usuario.keys() if p in matriz_completada.columns]
+    if len(pelis_validas) < 3:
         return pd.DataFrame(columns=['title', 'rating_predicho'])
     
-    datos = matriz_ampliada_limpia.values.astype(np.float64)
-    imputer = IterativeImputer(max_iter=1, random_state=42)
-    completada = imputer.fit_transform(datos)
+    # Crear vector del nuevo usuario solo con las películas en la matriz
+    nuevo_vector = pd.Series(index=matriz_completada.columns, dtype=float)
+    for p in pelis_validas:
+        nuevo_vector[p] = ratings_usuario[p]
     
-    matriz_ampliada_completada = pd.DataFrame(completada, 
-                                              index=matriz_ampliada_limpia.index, 
-                                              columns=matriz_ampliada_limpia.columns)
+    # Calcular similitud coseno con todos los usuarios existentes
+    from sklearn.metrics.pairwise import cosine_similarity
     
-    if nuevo_user_id not in matriz_ampliada_completada.index:
-        return pd.DataFrame(columns=['title', 'rating_predicho'])
+    # Rellenar NaN con 0 para el cálculo de similitud (en la matriz completada no hay NaN)
+    matriz_llena = matriz_completada.fillna(0)
+    nuevo_lleno = nuevo_vector.fillna(0).values.reshape(1, -1)
     
-    predicciones_usuario = matriz_ampliada_completada.loc[nuevo_user_id]
-    pelis_calificadas = set(ratings_usuario.keys())
-    predicciones_filtradas = predicciones_usuario.drop(labels=pelis_calificadas, errors='ignore')
-    recomendaciones = predicciones_filtradas.sort_values(ascending=False).head(top_n)
+    similitudes = cosine_similarity(nuevo_lleno, matriz_llena.values).flatten()
+    # Excluir al propio usuario (si existiera, pero aquí no)
+    usuarios_similares = np.argsort(similitudes)[::-1][:10]  # top 10 más similares
     
-    recomendaciones_df = pd.DataFrame({'item_id': recomendaciones.index, 'rating_predicho': recomendaciones.values})
+    # Predecir rating para cada película no calificada como promedio ponderado por similitud
+    pelis_no_calificadas = [c for c in matriz_completada.columns if c not in ratings_usuario]
+    predicciones = {}
+    for peli in pelis_no_calificadas:
+        ratings_similares = matriz_completada.iloc[usuarios_similares][peli].values
+        sims = similitudes[usuarios_similares]
+        # Evitar división por cero
+        if np.sum(np.abs(sims)) > 0:
+            pred = np.dot(ratings_similares, sims) / np.sum(np.abs(sims))
+        else:
+            pred = np.nanmean(ratings_similares)
+        predicciones[peli] = pred
+    
+    # Ordenar y tomar top_n
+    predicciones_series = pd.Series(predicciones).sort_values(ascending=False).head(top_n)
+    recomendaciones_df = pd.DataFrame({'item_id': predicciones_series.index, 'rating_predicho': predicciones_series.values})
     recomendaciones_df = recomendaciones_df.merge(movies_df, on='item_id', how='left')
     return recomendaciones_df[['title', 'rating_predicho']]
