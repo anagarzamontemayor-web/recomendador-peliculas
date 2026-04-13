@@ -18,7 +18,7 @@ def crear_matriz_usuario_item(ratings):
     matriz = matriz.astype(float)
     return matriz
 
-def entrenar_modelo_iterative(matriz, n_usuarios=300, n_peliculas=300, max_iter=3):
+def entrenar_modelo_iterative(matriz, n_usuarios=50, n_peliculas=50, max_iter=1):
     """
     Entrena sobre una muestra de los usuarios más activos y películas más populares.
     Esto acelera la primera carga a menos de 30 segundos.
