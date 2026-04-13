@@ -34,7 +34,8 @@ if st.sidebar.checkbox("Mostrar heatmap de matriz original"):
 
 st.subheader("🎞️ Paso 1: Selecciona al menos 5 películas para calificar")
 
-pelis_populares_ids = ratings_df['item_id'].value_counts().head(20).index.tolist()
+# Usar las películas que realmente están en la matriz completada (las 50 entrenadas)
+pelis_populares_ids = list(matriz_completada.columns)
 pelis_populares_df = movies_df[movies_df['item_id'].isin(pelis_populares_ids)].copy()
 pelis_populares_df = pelis_populares_df.sort_values('title')
 titulo_a_id = dict(zip(pelis_populares_df['title'], pelis_populares_df['item_id']))
@@ -70,7 +71,7 @@ if boton:
     else:
         with st.spinner("Calculando recomendaciones..."):
             st.write(f"📊 Películas calificadas: {len(ratings_usuario)}")
-            recomendaciones = recomendar_peliculas(ratings_usuario, matriz_original, movies_df, top_n=10)
+            recomendaciones = recomendar_peliculas(ratings_usuario, matriz_completada, movies_df, top_n=10)
             if recomendaciones.empty:
                 st.error("❌ No se pudieron generar recomendaciones. Prueba seleccionando otras películas de la lista.")
             else:
