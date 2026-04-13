@@ -18,16 +18,27 @@ def crear_matriz_usuario_item(ratings):
     matriz = matriz.astype(float)
     return matriz
 
-def entrenar_modelo_iterative(matriz):
+def entrenar_modelo_iterative(matriz, n_usuarios=300, n_peliculas=300, max_iter=3):
+    """
+    Entrena sobre una muestra de los usuarios más activos y películas más populares.
+    Esto acelera la primera carga a menos de 30 segundos.
+    """
+    # Seleccionar usuarios con más ratings
+    usuarios_activos = matriz.count(axis=1).sort_values(ascending=False).head(n_usuarios).index
+    # Seleccionar películas con más ratings
+    pelis_populares = matriz.count().sort_values(ascending=False).head(n_peliculas).index
+    
+    matriz_reducida = matriz.loc[usuarios_activos, pelis_populares]
+    
     # Eliminar filas/columnas completamente vacías
-    matriz_limpia = matriz.dropna(how='all').dropna(axis=1, how='all')
+    matriz_limpia = matriz_reducida.dropna(how='all').dropna(axis=1, how='all')
     if matriz_limpia.empty:
         raise ValueError("Matriz vacía tras limpieza.")
     
     datos = matriz_limpia.values.astype(np.float64)
     
-    # Usar IterativeImputer (similar a SoftImpute pero de sklearn)
-    imputer = IterativeImputer(max_iter=10, random_state=42)
+    # IterativeImputer con pocas iteraciones para rapidez
+    imputer = IterativeImputer(max_iter=max_iter, random_state=42)
     completada = imputer.fit_transform(datos)
     
     matriz_completada = pd.DataFrame(completada, 
@@ -51,7 +62,7 @@ def recomendar_peliculas(ratings_usuario, matriz_original, movies_df, top_n=10):
         return pd.DataFrame(columns=['title', 'rating_predicho'])
     
     datos = matriz_ampliada_limpia.values.astype(np.float64)
-    imputer = IterativeImputer(max_iter=10, random_state=42)
+    imputer = IterativeImputer(max_iter=3, random_state=42)
     completada = imputer.fit_transform(datos)
     
     matriz_ampliada_completada = pd.DataFrame(completada, 
