@@ -8,7 +8,7 @@ st.set_page_config(page_title="Recomendador de Películas", layout="wide")
 st.title("🎬 Sistema de Recomendación con Matrix Completion")
 
 @st.cache_data(show_spinner="🔄 Cargando datos y entrenando modelo (versión ligera)...")
-def cargar_modelo_v3():   # <-- Nombre NUEVO (v3)
+def cargar_modelo_recomendador():
     print("Iniciando carga de datos...")
     ratings, movies = cargar_datos('u.data', 'u.item')
     print("Datos cargados. Creando matriz...")
@@ -18,7 +18,8 @@ def cargar_modelo_v3():   # <-- Nombre NUEVO (v3)
     print("Modelo entrenado. Devolviendo datos.")
     return ratings, movies, matriz_original, matriz_completada
 
-ratings_df, movies_df, matriz_original, matriz_completada = obtener_datos_y_modelo()
+# Llamada a la función cacheada (nombre consistente)
+ratings_df, movies_df, matriz_original, matriz_completada = cargar_modelo_recomendador()
 
 st.sidebar.header("Instrucciones")
 st.sidebar.write("1. Califica al menos 10 películas usando los sliders.")
