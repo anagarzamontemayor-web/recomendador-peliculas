@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
 import os
-from fancyimpute import SoftImpute
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import IterativeImputer
 
 def cargar_datos(ruta_ratings='u.data', ruta_items='u.item'):
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -14,23 +15,21 @@ def cargar_datos(ruta_ratings='u.data', ruta_items='u.item'):
 
 def crear_matriz_usuario_item(ratings):
     matriz = ratings.pivot(index='user_id', columns='item_id', values='rating')
-    # Asegurar que todos los valores son float
     matriz = matriz.astype(float)
     return matriz
 
-def entrenar_modelo_softimpute(matriz):
-    # Eliminar filas y columnas completamente vacías
+def entrenar_modelo_iterative(matriz):
+    # Eliminar filas/columnas completamente vacías
     matriz_limpia = matriz.dropna(how='all').dropna(axis=1, how='all')
     if matriz_limpia.empty:
-        raise ValueError("La matriz está completamente vacía después de limpiar filas/columnas sin ratings.")
+        raise ValueError("Matriz vacía tras limpieza.")
     
-    # Convertir a numpy float64 explícitamente
     datos = matriz_limpia.values.astype(np.float64)
     
-    # Aplicar SoftImpute
-    completada = SoftImpute().fit_transform(datos)
+    # Usar IterativeImputer (similar a SoftImpute pero de sklearn)
+    imputer = IterativeImputer(max_iter=10, random_state=42)
+    completada = imputer.fit_transform(datos)
     
-    # Reconstruir DataFrame con los índices/columnas originales
     matriz_completada = pd.DataFrame(completada, 
                                      index=matriz_limpia.index, 
                                      columns=matriz_limpia.columns)
@@ -42,21 +41,24 @@ def recomendar_peliculas(ratings_usuario, matriz_original, movies_df, top_n=10):
     for item_id, rating in ratings_usuario.items():
         if item_id in nueva_fila.index:
             nueva_fila[item_id] = float(rating)
+    
     matriz_ampliada = matriz_original.copy()
     matriz_ampliada.loc[nuevo_user_id] = nueva_fila
     
-    # Limpiar filas/columnas completamente vacías antes de SoftImpute
+    # Limpiar filas/columnas vacías
     matriz_ampliada_limpia = matriz_ampliada.dropna(how='all').dropna(axis=1, how='all')
+    if matriz_ampliada_limpia.empty:
+        return pd.DataFrame(columns=['title', 'rating_predicho'])
+    
     datos = matriz_ampliada_limpia.values.astype(np.float64)
-    completada = SoftImpute().fit_transform(datos)
+    imputer = IterativeImputer(max_iter=10, random_state=42)
+    completada = imputer.fit_transform(datos)
     
     matriz_ampliada_completada = pd.DataFrame(completada, 
                                               index=matriz_ampliada_limpia.index, 
                                               columns=matriz_ampliada_limpia.columns)
     
-    # El nuevo usuario puede haber sido eliminado si solo calificó películas que luego fueron eliminadas
     if nuevo_user_id not in matriz_ampliada_completada.index:
-        # Reintegrar el usuario con sus predicciones originales (menos preciso pero evita error)
         return pd.DataFrame(columns=['title', 'rating_predicho'])
     
     predicciones_usuario = matriz_ampliada_completada.loc[nuevo_user_id]
