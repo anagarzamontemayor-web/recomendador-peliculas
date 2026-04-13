@@ -7,7 +7,7 @@ from recommender import cargar_datos, crear_matriz_usuario_item, entrenar_modelo
 st.set_page_config(page_title="Recomendador de Películas", layout="wide")
 st.title("🎬 Sistema de Recomendación con Matrix Completion")
 
-@st.cache_data
+@st.cache_data(show_spinner="🔄 Cargando datos y entrenando modelo... (unos segundos)")
 def obtener_datos_y_modelo():
     ratings, movies = cargar_datos('u.data', 'u.item')
     matriz_original = crear_matriz_usuario_item(ratings)
